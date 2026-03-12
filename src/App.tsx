@@ -128,16 +128,82 @@ const AdminPanel = ({ user, onBack }: { user: any, onBack: () => void }) => {
   const [stats, setStats] = useState<any>(null);
   const [bulkJson, setBulkJson] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'questions' | 'users' | 'logs'>('overview');
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [questionsList, setQuestionsList] = useState<any[]>([]);
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [questionCategory, setQuestionCategory] = useState('Maths');
+  const [newQuestion, setNewQuestion] = useState('');
+  const [newOptions, setNewOptions] = useState(['', '', '', '']);
+  const [newCorrect, setNewCorrect] = useState(0);
+  const [newExplanation, setNewExplanation] = useState('');
+  const [newDifficulty, setNewDifficulty] = useState(1);
 
   useEffect(() => {
     fetchStats();
+    fetchUsers();
+    fetchActivityLogs();
   }, []);
+
+  useEffect(() => {
+    fetchQuestionsByCategory();
+  }, [questionCategory]);
 
   const fetchStats = async () => {
     const res = await fetch('/api/admin/stats', {
       headers: { 'x-user-email': user?.email }
     });
     if (res.ok) setStats(await res.json());
+  };
+
+  const fetchUsers = async () => {
+    const res = await fetch('/api/admin/users', {
+      headers: { 'x-user-email': user?.email }
+    });
+    if (res.ok) setUsersList(await res.json());
+  };
+
+  const fetchQuestionsByCategory = async () => {
+    const res = await fetch(`/api/questions/${encodeURIComponent(questionCategory)}`);
+    if (res.ok) setQuestionsList(await res.json());
+  };
+
+  const fetchActivityLogs = async () => {
+    const res = await fetch('/api/admin/logs', {
+      headers: { 'x-user-email': user?.email }
+    });
+    if (res.ok) setActivityLogs(await res.json());
+  };
+
+  const handleSingleUpload = async () => {
+    if (!newQuestion || newOptions.some(o => !o)) {
+      alert('Please fill in the question and all options.');
+      return;
+    }
+    try {
+      setIsUploading(true);
+      const res = await fetch('/api/admin/questions/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-email': user?.email },
+        body: JSON.stringify({ questions: [{
+          category: questionCategory,
+          question: newQuestion,
+          options: newOptions,
+          correct_option: newCorrect,
+          explanation: newExplanation,
+          difficulty: newDifficulty
+        }]})
+      });
+      if (res.ok) {
+        alert('Question added!');
+        setNewQuestion(''); setNewOptions(['', '', '', '']); setNewCorrect(0); setNewExplanation('');
+        fetchStats(); fetchQuestionsByCategory();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Upload failed');
+      }
+    } catch { alert('Failed to add question.'); }
+    finally { setIsUploading(false); }
   };
 
   const handleBulkUpload = async () => {
@@ -155,7 +221,7 @@ const AdminPanel = ({ user, onBack }: { user: any, onBack: () => void }) => {
       if (res.ok) {
         alert("Bulk upload successful!");
         setBulkJson('');
-        fetchStats();
+        fetchStats(); fetchQuestionsByCategory();
       } else {
         const err = await res.json();
         alert(err.error || "Upload failed");
@@ -167,56 +233,327 @@ const AdminPanel = ({ user, onBack }: { user: any, onBack: () => void }) => {
     }
   };
 
+  const handleDeleteQuestion = async (id: number) => {
+    if (!confirm('Delete this question?')) return;
+    const res = await fetch(`/api/admin/questions/${id}`, {
+      method: 'DELETE',
+      headers: { 'x-user-email': user?.email }
+    });
+    if (res.ok) { fetchStats(); fetchQuestionsByCategory(); }
+    else alert('Failed to delete.');
+  };
+
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: <LayoutGrid size={18} /> },
+    { id: 'questions', label: 'Questions', icon: <BookOpen size={18} /> },
+    { id: 'users', label: 'Users', icon: <Users size={18} /> },
+    { id: 'logs', label: 'Activity', icon: <History size={18} /> },
+  ] as const;
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col max-w-[800px] mx-auto p-6">
-      <header className="flex items-center justify-between mb-8">
+    <div className="min-h-screen bg-slate-50 flex flex-col max-w-[900px] mx-auto p-4 md:p-6">
+      <header className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
             <ArrowLeft size={24} />
           </button>
           <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
             <ShieldCheck className="text-primary" />
-            Admin Academy Portal
+            Admin Portal
           </h1>
         </div>
+        <div className="text-xs text-slate-400 font-bold">{user?.email}</div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Wizards</p>
-          <p className="text-3xl font-black text-primary">{stats?.userCount || 0}</p>
-        </div>
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Questions</p>
-          <p className="text-3xl font-black text-primary">{stats?.questionCount || 0}</p>
-        </div>
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Categories</p>
-          <p className="text-3xl font-black text-primary">{stats?.categories?.length || 0}</p>
-        </div>
+      <div className="flex gap-1 p-1 bg-slate-100 rounded-2xl mb-6 overflow-x-auto">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+              activeTab === tab.id ? 'bg-white shadow-sm text-primary' : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100 mb-8">
-        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-          <Upload size={20} className="text-primary" />
-          Bulk Question Upload
-        </h2>
-        <p className="text-slate-500 text-sm mb-4">Paste your JSON formatted questions here. Format: <code>{'[{"category": "Maths", "question": "...", "options": ["A", "B", ...], "correct_option": 0, "explanation": "..."}]'}</code></p>
-        <textarea 
-          value={bulkJson}
-          onChange={(e) => setBulkJson(e.target.value)}
-          placeholder='[{"category": "Maths", ...}]'
-          className="w-full h-64 bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 font-mono text-sm focus:border-primary focus:outline-none mb-4"
-        />
-        <button 
-          onClick={handleBulkUpload}
-          disabled={isUploading || !bulkJson}
-          className="w-full bg-primary text-white font-bold h-14 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-50"
-        >
-          {isUploading ? "Casting Upload Spell..." : "Bulk Upload Questions"}
-          <Sparkles size={20} />
-        </button>
-      </div>
+      {activeTab === 'overview' && (
+        <div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Students</p>
+              <p className="text-3xl font-black text-primary">{stats?.userCount || 0}</p>
+            </div>
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Questions</p>
+              <p className="text-3xl font-black text-primary">{stats?.questionCount || 0}</p>
+            </div>
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Categories</p>
+              <p className="text-3xl font-black text-primary">{stats?.categories?.length || 0}</p>
+            </div>
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Answers Today</p>
+              <p className="text-3xl font-black text-primary">{stats?.todayAnswers || 0}</p>
+            </div>
+          </div>
+
+          {stats?.categories && (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-6">
+              <h3 className="font-bold text-slate-900 mb-4">Questions by Category</h3>
+              <div className="space-y-3">
+                {stats.categories.map((cat: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-600">{cat.category}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, (cat.count / (stats.questionCount || 1)) * 100)}%` }}></div>
+                      </div>
+                      <span className="text-sm font-bold text-slate-900 w-8 text-right">{cat.count}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <h3 className="font-bold text-slate-900 mb-4">Recent Activity</h3>
+            {activityLogs.length === 0 ? (
+              <p className="text-slate-400 text-sm">No recent activity logged.</p>
+            ) : (
+              <div className="space-y-2">
+                {activityLogs.slice(0, 5).map((log: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${log.is_correct ? 'bg-green-500' : 'bg-red-400'}`}></div>
+                      <span className="text-sm text-slate-600">{log.user_name} answered Q#{log.question_id}</span>
+                    </div>
+                    <span className="text-xs text-slate-400">{new Date(log.timestamp).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'questions' && (
+        <div>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-6">
+            <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <Plus size={18} className="text-primary" />
+              Add Question
+            </h2>
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <select
+                  value={questionCategory}
+                  onChange={(e) => setQuestionCategory(e.target.value)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium bg-white"
+                >
+                  <option value="Maths">Maths</option>
+                  <option value="English">English</option>
+                  <option value="Verbal">Verbal Reasoning</option>
+                  <option value="Non-Verbal">Non-Verbal Reasoning</option>
+                </select>
+                <select
+                  value={newDifficulty}
+                  onChange={(e) => setNewDifficulty(Number(e.target.value))}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium bg-white"
+                >
+                  <option value={1}>Easy</option>
+                  <option value={2}>Medium</option>
+                  <option value={3}>Hard</option>
+                </select>
+              </div>
+              <textarea
+                value={newQuestion}
+                onChange={(e) => setNewQuestion(e.target.value)}
+                placeholder="Enter question text..."
+                className="w-full h-20 border border-slate-200 rounded-xl p-3 text-sm focus:border-primary focus:outline-none"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                {newOptions.map((opt, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="correctOption"
+                      checked={newCorrect === i}
+                      onChange={() => setNewCorrect(i)}
+                      className="accent-primary"
+                    />
+                    <input
+                      value={opt}
+                      onChange={(e) => {
+                        const copy = [...newOptions];
+                        copy[i] = e.target.value;
+                        setNewOptions(copy);
+                      }}
+                      placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                    />
+                  </div>
+                ))}
+              </div>
+              <input
+                value={newExplanation}
+                onChange={(e) => setNewExplanation(e.target.value)}
+                placeholder="Explanation (optional)"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              />
+              <button
+                onClick={handleSingleUpload}
+                disabled={isUploading}
+                className="bg-primary text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 shadow-md shadow-primary/20 disabled:opacity-50"
+              >
+                <Plus size={16} /> Add Question
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-6">
+            <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <Upload size={18} className="text-primary" />
+              Bulk Upload (JSON)
+            </h2>
+            <p className="text-slate-500 text-xs mb-3">Format: <code className="bg-slate-100 px-1 rounded">{'[{"category": "Maths", "question": "...", "options": [...], "correct_option": 0, "explanation": "..."}]'}</code></p>
+            <textarea 
+              value={bulkJson}
+              onChange={(e) => setBulkJson(e.target.value)}
+              placeholder='[{"category": "Maths", ...}]'
+              className="w-full h-40 bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-xs focus:border-primary focus:outline-none mb-3"
+            />
+            <button 
+              onClick={handleBulkUpload}
+              disabled={isUploading || !bulkJson}
+              className="bg-primary text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 shadow-md shadow-primary/20 disabled:opacity-50"
+            >
+              <Upload size={16} /> {isUploading ? 'Uploading...' : 'Bulk Upload'}
+            </button>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold">Existing Questions</h2>
+              <select
+                value={questionCategory}
+                onChange={(e) => setQuestionCategory(e.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium bg-white"
+              >
+                <option value="Maths">Maths</option>
+                <option value="English">English</option>
+                <option value="Verbal">Verbal</option>
+                <option value="Non-Verbal">Non-Verbal</option>
+              </select>
+            </div>
+            {questionsList.length === 0 ? (
+              <p className="text-slate-400 text-sm py-4 text-center">No questions in this category.</p>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {questionsList.map((q: any) => (
+                  <div key={q.id} className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-slate-900 mb-2">{q.question}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {q.options?.map((opt: string, i: number) => (
+                            <span key={i} className={`text-xs px-2 py-1 rounded-md ${i === q.correct_option ? 'bg-green-100 text-green-700 font-bold' : 'bg-slate-100 text-slate-500'}`}>
+                              {String.fromCharCode(65 + i)}: {opt}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteQuestion(q.id)}
+                        className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'users' && (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h2 className="text-lg font-bold mb-4">All Users ({usersList.length})</h2>
+          {usersList.length === 0 ? (
+            <p className="text-slate-400 text-sm py-4 text-center">No users found.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left py-3 px-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Name</th>
+                    <th className="text-left py-3 px-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Email</th>
+                    <th className="text-left py-3 px-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Role</th>
+                    <th className="text-left py-3 px-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Level</th>
+                    <th className="text-left py-3 px-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">EXP</th>
+                    <th className="text-left py-3 px-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Class</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usersList.map((u: any) => (
+                    <tr key={u.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                      <td className="py-3 px-2 font-medium text-slate-900">{u.name}</td>
+                      <td className="py-3 px-2 text-slate-500">{u.email}</td>
+                      <td className="py-3 px-2">
+                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                          u.role === 'ADMIN' ? 'bg-red-100 text-red-700' :
+                          u.role === 'PARENT' ? 'bg-blue-100 text-blue-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>{u.role}</span>
+                      </td>
+                      <td className="py-3 px-2 font-bold text-primary">{u.level}</td>
+                      <td className="py-3 px-2 text-slate-600">{u.exp}</td>
+                      <td className="py-3 px-2 text-slate-500">{u.class || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'logs' && (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold">Activity Log</h2>
+            <button onClick={fetchActivityLogs} className="text-primary text-xs font-bold uppercase tracking-widest hover:underline">Refresh</button>
+          </div>
+          {activityLogs.length === 0 ? (
+            <p className="text-slate-400 text-sm py-4 text-center">No activity logged yet.</p>
+          ) : (
+            <div className="space-y-2 max-h-[500px] overflow-y-auto">
+              {activityLogs.map((log: any, i: number) => (
+                <div key={i} className="flex items-center justify-between py-3 px-3 rounded-xl hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${log.is_correct ? 'bg-green-500' : 'bg-red-400'}`}>
+                      {log.is_correct ? <Check size={14} /> : '✗'}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">{log.user_name || 'Unknown'}</p>
+                      <p className="text-xs text-slate-400">Q#{log.question_id} • {log.category || 'General'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-xs font-bold ${log.is_correct ? 'text-green-600' : 'text-red-500'}`}>{log.is_correct ? 'Correct' : 'Incorrect'}</p>
+                    <p className="text-[10px] text-slate-400">{new Date(log.timestamp).toLocaleString()}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -530,18 +867,66 @@ const CreateAccount = ({ onBack, onNext, onUserCreated }: { onBack: () => void, 
   const [grade, setGrade] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState('STUDENT');
+  // Parent-specific fields
+  const [childName, setChildName] = useState('');
+  const [childClass, setChildClass] = useState('');
+  const [childEmail, setChildEmail] = useState('');
+  const [linkExisting, setLinkExisting] = useState(false);
+  const [childFound, setChildFound] = useState<any>(null);
+  const [searchingChild, setSearchingChild] = useState(false);
+
+  const searchChildAccount = async () => {
+    if (!childEmail) return;
+    setSearchingChild(true);
+    setChildFound(null);
+    try {
+      const res = await fetch(`/api/user/${encodeURIComponent(childEmail)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.role === 'STUDENT') {
+          setChildFound(data);
+        } else {
+          alert('This email belongs to a non-student account.');
+        }
+      } else {
+        alert('No student account found with this email.');
+      }
+    } catch (e) {
+      alert('Failed to search. Please try again.');
+    } finally {
+      setSearchingChild(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!email || !name) {
       alert("Please fill in your name and email!");
       return;
     }
+    if (role === 'PARENT' && !linkExisting && !childName) {
+      alert("Please enter your child's name.");
+      return;
+    }
+    if (role === 'PARENT' && linkExisting && !childFound) {
+      alert("Please search and find your child's account first.");
+      return;
+    }
     
     try {
+      const body: any = { name, email, role };
+      if (role === 'STUDENT') {
+        body.age = age;
+        body.class = grade;
+      } else if (role === 'PARENT') {
+        body.childName = linkExisting ? childFound?.name : childName;
+        body.childClass = linkExisting ? childFound?.class : childClass;
+        body.childEmail = linkExisting ? childFound?.email : undefined;
+      }
+
       const res = await fetch('/api/user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, age, class: grade, role })
+        body: JSON.stringify(body)
       });
       
       if (res.ok) {
@@ -579,8 +964,8 @@ const CreateAccount = ({ onBack, onNext, onUserCreated }: { onBack: () => void, 
 
       <div className="flex flex-col gap-4 px-4 py-3">
         <div className="flex flex-col gap-2">
-          <p className="text-slate-900 text-base font-medium leading-normal">My Magical Role is...</p>
-          <div className="grid grid-cols-2 gap-2 p-1 bg-primary/10 rounded-xl w-full">
+          <p className="text-slate-900 text-base font-medium leading-normal">I am a...</p>
+          <div className="grid grid-cols-3 gap-2 p-1 bg-primary/10 rounded-xl w-full">
             <button 
               onClick={() => setRole('STUDENT')}
               className={`py-3 px-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${role === 'STUDENT' ? 'bg-white shadow-sm text-primary border border-primary/20' : 'text-slate-500'}`}
@@ -596,13 +981,6 @@ const CreateAccount = ({ onBack, onNext, onUserCreated }: { onBack: () => void, 
               Parent
             </button>
             <button 
-              onClick={() => setRole('TEACHER')}
-              className={`py-3 px-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${role === 'TEACHER' ? 'bg-white shadow-sm text-primary border border-primary/20' : 'text-slate-500'}`}
-            >
-              <BookOpen size={20} />
-              Teacher
-            </button>
-            <button 
               onClick={() => setRole('ADMIN')}
               className={`py-3 px-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${role === 'ADMIN' ? 'bg-white shadow-sm text-primary border border-primary/20' : 'text-slate-500'}`}
             >
@@ -613,12 +991,12 @@ const CreateAccount = ({ onBack, onNext, onUserCreated }: { onBack: () => void, 
         </div>
 
         <label className="flex flex-col w-full">
-          <p className="text-slate-900 text-base font-medium leading-normal pb-2">Wizard Name</p>
+          <p className="text-slate-900 text-base font-medium leading-normal pb-2">{role === 'PARENT' ? 'Your Name' : role === 'ADMIN' ? 'Admin Name' : 'Wizard Name'}</p>
           <div className="relative">
             <User size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-primary/60" />
             <input 
               className="flex w-full rounded-xl text-slate-900 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-primary/20 bg-white h-14 placeholder:text-slate-400 pl-12 pr-4 text-base font-normal transition-all" 
-              placeholder="Merlin Jr." 
+              placeholder={role === 'PARENT' ? 'Your full name' : role === 'ADMIN' ? 'Admin name' : 'Your name'}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -632,7 +1010,7 @@ const CreateAccount = ({ onBack, onNext, onUserCreated }: { onBack: () => void, 
             <Mail size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-primary/60" />
             <input 
               className="flex w-full rounded-xl text-slate-900 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-primary/20 bg-white h-14 placeholder:text-slate-400 pl-12 pr-4 text-base font-normal transition-all" 
-              placeholder="wizard@magic.com" 
+              placeholder="your@email.com" 
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -640,34 +1018,124 @@ const CreateAccount = ({ onBack, onNext, onUserCreated }: { onBack: () => void, 
           </div>
         </label>
 
-        <div className="flex gap-4">
-          <label className="flex flex-col flex-1">
-            <p className="text-slate-900 text-base font-medium leading-normal pb-2">Age</p>
-            <input 
-              className="flex w-full rounded-xl text-slate-900 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-primary/20 bg-white h-14 placeholder:text-slate-400 p-4 text-base font-normal transition-all" 
-              placeholder="Years" 
-              type="number"
-              value={age}
-              onChange={(e) => setAge(e.target.value)}
-            />
-          </label>
-          <label className="flex flex-col flex-1">
-            <p className="text-slate-900 text-base font-medium leading-normal pb-2">Class</p>
-            <select 
-              className="flex w-full rounded-xl text-slate-900 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-primary/20 bg-white h-14 p-4 text-base font-normal transition-all appearance-none"
-              value={grade}
-              onChange={(e) => setGrade(e.target.value)}
-            >
-              <option value="">Select Class</option>
-              <option value="1">Grade 1</option>
-              <option value="2">Grade 2</option>
-              <option value="3">Grade 3</option>
-              <option value="4">Grade 4</option>
-              <option value="5">Grade 5</option>
-              <option value="6">Grade 6</option>
-            </select>
-          </label>
-        </div>
+        {/* Student-specific fields */}
+        {role === 'STUDENT' && (
+          <div className="flex gap-4">
+            <label className="flex flex-col flex-1">
+              <p className="text-slate-900 text-base font-medium leading-normal pb-2">Age</p>
+              <input 
+                className="flex w-full rounded-xl text-slate-900 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-primary/20 bg-white h-14 placeholder:text-slate-400 p-4 text-base font-normal transition-all" 
+                placeholder="Years" 
+                type="number"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col flex-1">
+              <p className="text-slate-900 text-base font-medium leading-normal pb-2">Class</p>
+              <select 
+                className="flex w-full rounded-xl text-slate-900 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-primary/20 bg-white h-14 p-4 text-base font-normal transition-all appearance-none"
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+              >
+                <option value="">Select Class</option>
+                <option value="1">Grade 1</option>
+                <option value="2">Grade 2</option>
+                <option value="3">Grade 3</option>
+                <option value="4">Grade 4</option>
+                <option value="5">Grade 5</option>
+                <option value="6">Grade 6</option>
+              </select>
+            </label>
+          </div>
+        )}
+
+        {/* Parent-specific fields */}
+        {role === 'PARENT' && (
+          <div className="flex flex-col gap-4 p-4 bg-primary/5 rounded-2xl border border-primary/10">
+            <h3 className="text-slate-900 font-bold flex items-center gap-2">
+              <Baby size={18} className="text-primary" />
+              Child Information
+            </h3>
+
+            <div className="flex gap-2 p-1 bg-white rounded-lg">
+              <button
+                onClick={() => { setLinkExisting(false); setChildFound(null); }}
+                className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${!linkExisting ? 'bg-primary text-white' : 'text-slate-500'}`}
+              >
+                New Child
+              </button>
+              <button
+                onClick={() => setLinkExisting(true)}
+                className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${linkExisting ? 'bg-primary text-white' : 'text-slate-500'}`}
+              >
+                Link Existing
+              </button>
+            </div>
+
+            {!linkExisting ? (
+              <>
+                <label className="flex flex-col w-full">
+                  <p className="text-slate-700 text-sm font-medium pb-1">Child's Name</p>
+                  <input 
+                    className="flex w-full rounded-xl text-slate-900 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-primary/20 bg-white h-12 placeholder:text-slate-400 px-4 text-base font-normal transition-all" 
+                    placeholder="Your child's name"
+                    type="text"
+                    value={childName}
+                    onChange={(e) => setChildName(e.target.value)}
+                  />
+                </label>
+                <label className="flex flex-col w-full">
+                  <p className="text-slate-700 text-sm font-medium pb-1">Child's Class</p>
+                  <select 
+                    className="flex w-full rounded-xl text-slate-900 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-primary/20 bg-white h-12 px-4 text-base font-normal transition-all appearance-none"
+                    value={childClass}
+                    onChange={(e) => setChildClass(e.target.value)}
+                  >
+                    <option value="">Select Class</option>
+                    <option value="1">Grade 1</option>
+                    <option value="2">Grade 2</option>
+                    <option value="3">Grade 3</option>
+                    <option value="4">Grade 4</option>
+                    <option value="5">Grade 5</option>
+                    <option value="6">Grade 6</option>
+                  </select>
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="flex flex-col w-full">
+                  <p className="text-slate-700 text-sm font-medium pb-1">Child's Email</p>
+                  <div className="flex gap-2">
+                    <input 
+                      className="flex flex-1 rounded-xl text-slate-900 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-primary/20 bg-white h-12 placeholder:text-slate-400 px-4 text-base font-normal transition-all" 
+                      placeholder="child@email.com"
+                      type="email"
+                      value={childEmail}
+                      onChange={(e) => { setChildEmail(e.target.value); setChildFound(null); }}
+                    />
+                    <button
+                      onClick={searchChildAccount}
+                      disabled={searchingChild || !childEmail}
+                      className="bg-primary text-white px-4 rounded-xl font-bold text-sm disabled:opacity-50 flex items-center gap-1"
+                    >
+                      {searchingChild ? '...' : 'Find'}
+                    </button>
+                  </div>
+                </label>
+                {childFound && (
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
+                    <Check size={20} className="text-green-600" />
+                    <div>
+                      <p className="text-green-800 font-bold text-sm">{childFound.name}</p>
+                      <p className="text-green-600 text-xs">Grade {childFound.class || 'N/A'} • Level {childFound.level}</p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         <div className="w-full h-24 rounded-2xl overflow-hidden relative my-2">
           <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
@@ -677,7 +1145,7 @@ const CreateAccount = ({ onBack, onNext, onUserCreated }: { onBack: () => void, 
               referrerPolicy="no-referrer"
             />
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-primary font-semibold text-sm">Unlock your special abilities</span>
+              <span className="text-primary font-semibold text-sm">{role === 'PARENT' ? 'Guide your child\'s magical journey' : role === 'ADMIN' ? 'Manage the academy' : 'Unlock your special abilities'}</span>
             </div>
           </div>
         </div>
@@ -687,7 +1155,7 @@ const CreateAccount = ({ onBack, onNext, onUserCreated }: { onBack: () => void, 
             onClick={handleSubmit}
             className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-14 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-primary/30 active:scale-[0.98] transition-all"
           >
-            <span>Create Magical Account</span>
+            <span>Create {role === 'PARENT' ? 'Parent' : role === 'ADMIN' ? 'Admin' : 'Magical'} Account</span>
             <Sparkles size={20} />
           </button>
           <p className="text-slate-500 text-xs text-center mt-4 px-8">

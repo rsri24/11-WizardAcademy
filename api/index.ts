@@ -125,7 +125,7 @@ const UserSchema = z.object({
   name: z.string().min(2).max(50),
   age: z.union([z.number(), z.string()]).optional(),
   class: z.string().optional(),
-  role: z.enum(['STUDENT', 'TEACHER', 'PARENT', 'ADMIN']).default('STUDENT')
+  role: z.enum(['STUDENT', 'PARENT', 'ADMIN']).default('STUDENT')
 });
 
 // Get user by email
@@ -225,7 +225,34 @@ app.get("/api/admin/stats", isAdmin, (_req, res) => {
   const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
   const questionCount = db.prepare("SELECT COUNT(*) as count FROM questions").get() as { count: number };
   const categories = db.prepare("SELECT category, COUNT(*) as count FROM questions GROUP BY category").all();
-  res.json({ userCount: userCount.count, questionCount: questionCount.count, categories });
+  const todayAnswers = (db.prepare("SELECT COUNT(*) as count FROM progress WHERE date(timestamp) = date('now')").get() as { count: number }).count;
+  res.json({ userCount: userCount.count, questionCount: questionCount.count, categories, todayAnswers });
+});
+
+app.get("/api/admin/users", isAdmin, (_req, res) => {
+  const users = db.prepare("SELECT id, name, email, role, level, exp, class FROM users ORDER BY id DESC").all();
+  res.json(users);
+});
+
+app.get("/api/admin/logs", isAdmin, (_req, res) => {
+  const logs = db.prepare(`
+    SELECT p.*, u.name as user_name, q.category
+    FROM progress p
+    LEFT JOIN users u ON p.user_id = u.id
+    LEFT JOIN questions q ON p.question_id = q.id
+    ORDER BY p.timestamp DESC
+    LIMIT 100
+  `).all();
+  res.json(logs);
+});
+
+app.delete("/api/admin/questions/:id", isAdmin, (req, res) => {
+  try {
+    db.prepare("DELETE FROM questions WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to delete question" });
+  }
 });
 
 app.get("/api/badges/:userId", (req, res) => {
