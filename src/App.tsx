@@ -61,7 +61,8 @@ type Screen =
   | 'vault'
   | 'badgeDetails'
   | 'ranks'
-  | 'admin';
+  | 'admin'
+  | 'parentDashboard';
 
 // --- Components ---
 
@@ -2259,6 +2260,291 @@ const ProgressGrimoire = ({ onNavigate }: { onNavigate: (s: Screen) => void }) =
   );
 };
 
+const ParentDashboard = ({ user, onNavigate }: { user: any, onNavigate: (s: Screen) => void }) => {
+  const [childData, setChildData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'overview' | 'subjects' | 'activity'>('overview');
+
+  useEffect(() => {
+    if (user?.email) {
+      fetch(`/api/parent/child-progress/${encodeURIComponent(user.email)}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => { if (data) setChildData(data); })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, [user?.email]);
+
+  const child = childData?.child;
+  const progress = childData?.progress;
+  const rank = childData?.leaderboardRank;
+  const recentActivity = childData?.recentActivity || [];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background-light flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Wand2 size={48} className="text-primary animate-spin" />
+          <p className="text-slate-500 font-bold">Loading child's progress...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background-light flex flex-col max-w-[480px] mx-auto overflow-x-hidden">
+      <header className="flex items-center p-4 justify-between sticky top-0 z-10 bg-background-light/80 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+            <Users size={24} />
+          </div>
+          <div>
+            <h2 className="text-slate-900 text-sm font-bold">{user?.name || 'Parent'}</h2>
+            <p className="text-primary text-[8px] font-bold uppercase tracking-widest">Guardian Portal</p>
+          </div>
+        </div>
+        <button 
+          onClick={() => onNavigate('logout' as any)}
+          className="bg-red-500/10 text-red-500 p-2 rounded-full hover:bg-red-500/20 transition-colors"
+          title="Logout"
+        >
+          <LogOut size={20} />
+        </button>
+      </header>
+
+      <main className="flex-1 p-4">
+        {child ? (
+          <>
+            <div className="bg-gradient-to-br from-primary to-primary/80 rounded-[40px] p-6 text-white relative overflow-hidden mb-6 shadow-xl">
+              <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
+              <div className="relative z-10 flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full border-2 border-white/50 p-0.5">
+                  <img src={child.avatar || "https://picsum.photos/seed/child/100/100"} className="w-full h-full rounded-full object-cover" referrerPolicy="no-referrer" />
+                </div>
+                <div className="flex-1">
+                  <h1 className="text-2xl font-black">{child.name}</h1>
+                  <p className="text-white/80 text-sm">Grade {child.class || 'N/A'} &bull; Level {child.level} Mage</p>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-bold">{child.exp} XP</span>
+                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-bold">{child.mana} Mana</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 p-1 bg-primary/10 rounded-xl mb-6">
+              {(['overview', 'subjects', 'activity'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all capitalize ${activeTab === tab ? 'bg-white shadow-sm text-primary' : 'text-slate-500'}`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === 'overview' && (
+              <>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="bg-white p-5 rounded-[30px] border border-slate-100 shadow-sm flex flex-col items-center text-center">
+                    <BookOpen size={22} className="text-primary mb-3" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Questions Done</p>
+                    <p className="text-2xl font-black text-slate-900">{progress?.total || 0}</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-[30px] border border-slate-100 shadow-sm flex flex-col items-center text-center">
+                    <Check size={22} className="text-green-500 mb-3" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Accuracy</p>
+                    <p className="text-2xl font-black text-slate-900">{progress?.accuracy || 0}%</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-[30px] border border-slate-100 shadow-sm flex flex-col items-center text-center">
+                    <Trophy size={22} className="text-yellow-500 mb-3" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Leaderboard</p>
+                    <p className="text-2xl font-black text-slate-900">#{rank || '\u2014'}</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-[30px] border border-slate-100 shadow-sm flex flex-col items-center text-center">
+                    <Star size={22} className="text-primary mb-3" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Level</p>
+                    <p className="text-2xl font-black text-slate-900">{child.level}</p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-[30px] p-6 border border-slate-100 shadow-sm mb-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-slate-900 font-bold">Leaderboard Position</h3>
+                    <span className="text-primary text-xs font-bold">#{rank || '\u2014'}</span>
+                  </div>
+                  <div className="flex items-center gap-4 bg-primary/5 p-4 rounded-2xl">
+                    <div className="w-12 h-12 rounded-full bg-primary/20 overflow-hidden">
+                      <img src={child.avatar || "https://picsum.photos/seed/child/100/100"} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-slate-900">{child.name}</p>
+                      <p className="text-xs text-slate-400">Rank #{rank || '\u2014'} &bull; {child.exp} XP</p>
+                    </div>
+                    <Trophy size={24} className="text-yellow-500" />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-[30px] p-6 border border-slate-100 shadow-sm mb-6">
+                  <h3 className="text-slate-900 font-bold mb-4">Mock Test Performance</h3>
+                  {progress?.byCategory && progress.byCategory.length > 0 ? (
+                    <div className="space-y-3">
+                      {progress.byCategory.map((cat: any, i: number) => {
+                        const pct = cat.total > 0 ? Math.round((cat.correct / cat.total) * 100) : 0;
+                        return (
+                          <div key={i}>
+                            <div className="flex justify-between mb-1">
+                              <span className="text-sm font-bold text-slate-700">{cat.category}</span>
+                              <span className={`text-sm font-bold ${pct >= 70 ? 'text-green-500' : pct >= 50 ? 'text-orange-500' : 'text-red-500'}`}>{pct}%</span>
+                            </div>
+                            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${pct >= 70 ? 'bg-green-500' : pct >= 50 ? 'bg-orange-500' : 'bg-red-500'}`} style={{ width: `${pct}%` }}></div>
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-1">{cat.correct}/{cat.total} correct</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 text-sm text-center py-4">No test data yet. Your child hasn't started practising.</p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {activeTab === 'subjects' && (
+              <>
+                <h3 className="text-slate-900 font-bold mb-4 px-2">Subject Performance &amp; Weak Areas</h3>
+                {progress?.byCategory && progress.byCategory.length > 0 ? (
+                  <div className="space-y-4 mb-6">
+                    {[...progress.byCategory]
+                      .sort((a: any, b: any) => {
+                        const pctA = a.total > 0 ? (a.correct / a.total) : 0;
+                        const pctB = b.total > 0 ? (b.correct / b.total) : 0;
+                        return pctA - pctB;
+                      })
+                      .map((cat: any, i: number) => {
+                        const pct = cat.total > 0 ? Math.round((cat.correct / cat.total) * 100) : 0;
+                        const isWeak = pct < 60;
+                        const isOk = pct >= 60 && pct < 80;
+                        return (
+                          <div key={i} className={`p-5 rounded-[30px] border shadow-sm ${isWeak ? 'bg-red-50 border-red-200' : isOk ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isWeak ? 'bg-red-500/10 text-red-500' : isOk ? 'bg-orange-500/10 text-orange-500' : 'bg-green-500/10 text-green-500'}`}>
+                                  <BookOpen size={20} />
+                                </div>
+                                <div>
+                                  <p className="font-bold text-slate-900">{cat.category}</p>
+                                  <p className={`text-xs font-bold ${isWeak ? 'text-red-500' : isOk ? 'text-orange-500' : 'text-green-500'}`}>
+                                    {isWeak ? 'Needs Attention' : isOk ? 'Good Progress' : 'Excellent'}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className={`text-2xl font-black ${isWeak ? 'text-red-500' : isOk ? 'text-orange-500' : 'text-green-500'}`}>{pct}%</span>
+                            </div>
+                            <div className="h-2 w-full bg-white/80 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${isWeak ? 'bg-red-500' : isOk ? 'bg-orange-500' : 'bg-green-500'}`} style={{ width: `${pct}%` }}></div>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-2">{cat.correct} correct out of {cat.total} questions attempted</p>
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-[30px] p-8 border border-slate-100 shadow-sm text-center mb-6">
+                    <BookOpen size={40} className="text-slate-200 mx-auto mb-4" />
+                    <p className="text-slate-400 text-sm">No subject data available yet.</p>
+                    <p className="text-slate-300 text-xs mt-1">Your child needs to answer some questions first.</p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeTab === 'activity' && (
+              <>
+                <h3 className="text-slate-900 font-bold mb-4 px-2">Recent Activity</h3>
+                {recentActivity.length > 0 ? (
+                  <div className="space-y-3 mb-6">
+                    {recentActivity.map((act: any, i: number) => (
+                      <div key={i} className={`bg-white p-4 rounded-2xl border shadow-sm flex items-center gap-3 ${act.is_correct ? 'border-green-100' : 'border-red-100'}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${act.is_correct ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                          {act.is_correct ? <Check size={16} /> : <ArrowLeft size={16} className="rotate-45" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-700 truncate">{act.category}</p>
+                          <p className="text-xs text-slate-400 truncate">{act.question}</p>
+                        </div>
+                        <span className={`text-[10px] font-bold ${act.is_correct ? 'text-green-500' : 'text-red-500'}`}>
+                          {act.is_correct ? 'Correct' : 'Wrong'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-[30px] p-8 border border-slate-100 shadow-sm text-center mb-6">
+                    <History size={40} className="text-slate-200 mx-auto mb-4" />
+                    <p className="text-slate-400 text-sm">No recent activity.</p>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        ) : (
+          <div className="bg-white rounded-[40px] p-8 border border-slate-100 shadow-sm text-center mb-6">
+            <Baby size={48} className="text-primary/30 mx-auto mb-4" />
+            <h3 className="text-slate-900 font-bold text-lg mb-2">No Child Linked</h3>
+            <p className="text-slate-400 text-sm mb-4">Your child's account hasn't been linked yet. Ask your child to create a student account, then sign up again using "Link Existing" to connect.</p>
+          </div>
+        )}
+
+        <button className="w-full bg-gradient-to-r from-primary to-primary/80 text-white font-bold h-16 rounded-3xl flex items-center justify-between px-8 shadow-lg shadow-primary/30 active:scale-[0.98] transition-all mb-4">
+          <div className="flex items-center gap-4">
+            <Star size={24} />
+            <div className="text-left">
+              <span className="text-lg block">Premium Membership</span>
+              <span className="text-white/70 text-[10px] block">Unlock mock tests, detailed reports &amp; more</span>
+            </div>
+          </div>
+          <ArrowLeft size={24} className="rotate-180" />
+        </button>
+
+        <button className="w-full bg-white text-slate-900 font-bold h-14 rounded-3xl flex items-center justify-between px-8 border border-slate-100 shadow-sm active:scale-[0.98] transition-all mb-6">
+          <div className="flex items-center gap-4">
+            <Mail size={20} />
+            <span>Contact Support</span>
+          </div>
+          <ArrowLeft size={20} className="rotate-180 text-slate-300" />
+        </button>
+      </main>
+
+      <nav className="sticky bottom-0 bg-white/80 backdrop-blur-md border-t border-slate-100 flex justify-around p-4 pb-8 z-50">
+        <div className="flex flex-col items-center gap-1 cursor-pointer text-primary">
+          <LayoutGrid size={24} />
+          <span className="text-[10px] font-bold">Home</span>
+        </div>
+        <div 
+          onClick={() => onNavigate('ranks')}
+          className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-primary/60"
+        >
+          <Trophy size={24} />
+          <span className="text-[10px] font-bold">Ranks</span>
+        </div>
+        <div 
+          onClick={() => onNavigate('logout' as any)}
+          className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-primary/60"
+        >
+          <LogOut size={24} />
+          <span className="text-[10px] font-bold">Logout</span>
+        </div>
+      </nav>
+    </div>
+  );
+};
+
 const GuardianPortal = ({ onNavigate }: { onNavigate: (s: Screen) => void }) => {
   return (
     <div className="min-h-screen bg-background-light flex flex-col max-w-[480px] mx-auto overflow-x-hidden">
@@ -2767,7 +3053,7 @@ export default function App() {
     // Try to load user from local storage or session
     const savedEmail = localStorage.getItem('wizard_email');
     if (savedEmail) {
-      fetchUser(savedEmail);
+      fetchUser(savedEmail, true);
     }
     fetchLeaderboard();
   }, []);
@@ -2784,13 +3070,16 @@ export default function App() {
     }
   };
 
-  const fetchUser = async (email: string) => {
+  const fetchUser = async (email: string, autoLogin = false) => {
     try {
-      const res = await fetch(`/api/user/${email}`);
+      const res = await fetch(`/api/user/${encodeURIComponent(email)}`);
       if (res.ok) {
         const data = await res.json();
         setUser(data);
         localStorage.setItem('wizard_email', email);
+        if (autoLogin) {
+          setScreen(data.role === 'PARENT' ? 'parentDashboard' : 'dashboard');
+        }
       }
     } catch (e) {
       console.error("Failed to fetch user", e);
@@ -2852,7 +3141,7 @@ export default function App() {
       case 'signup':
         return <CreateAccount onBack={() => setScreen('login')} onNext={() => setScreen('otp')} onUserCreated={fetchUser} />;
       case 'otp':
-        return <OTPVerification onBack={() => setScreen('signup')} onVerify={() => setScreen('avatar')} />;
+        return <OTPVerification onBack={() => setScreen('signup')} onVerify={() => setScreen(user?.role === 'PARENT' ? 'parentDashboard' : 'avatar')} />;
       case 'avatar':
         return <AvatarSelection onBack={() => setScreen('otp')} onComplete={() => setScreen('welcome')} />;
       case 'welcome':
@@ -2872,6 +3161,7 @@ export default function App() {
       case 'result':
         return <TestResultScreen onContinue={() => setScreen('dashboard')} />;
       case 'dashboard':
+        if (user?.role === 'PARENT') return <ParentDashboard user={user} onNavigate={setScreen} />;
         return <Dashboard user={user} onNavigate={setScreen} />;
       case 'subjectSelection':
         return <SubjectSelection onNavigate={setScreen} onFetchQuestions={fetchQuestions} />;
@@ -2891,6 +3181,8 @@ export default function App() {
         return <Rankings user={user} leaderboard={leaderboard} onNavigate={setScreen} />;
       case 'admin':
         return <AdminPanel user={user} onBack={() => setScreen('dashboard')} />;
+      case 'parentDashboard':
+        return <ParentDashboard user={user} onNavigate={setScreen} />;
       default:
         return <LandingPage onNavigate={setScreen} />;
     }

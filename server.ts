@@ -26,6 +26,14 @@ try {
   db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'STUDENT'");
 }
 
+// Migration: Add child_email column if it doesn't exist
+try {
+  db.prepare("SELECT child_email FROM users LIMIT 1").get();
+} catch (e) {
+  console.log("Adding child_email column to users table...");
+  db.exec("ALTER TABLE users ADD COLUMN child_email TEXT");
+}
+
 // Initialize database
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -39,7 +47,8 @@ db.exec(`
     exp INTEGER DEFAULT 0,
     mana INTEGER DEFAULT 0,
     stars INTEGER DEFAULT 0,
-    avatar TEXT
+    avatar TEXT,
+    child_email TEXT
   );
 
   CREATE TABLE IF NOT EXISTS questions (
@@ -153,7 +162,8 @@ async function startServer() {
     name: z.string().min(2).max(50),
     age: z.union([z.number(), z.string()]).optional(),
     class: z.string().optional(),
-    role: z.enum(['STUDENT', 'PARENT', 'ADMIN']).default('STUDENT')
+    role: z.enum(['STUDENT', 'PARENT', 'ADMIN']).default('STUDENT'),
+    childEmail: z.string().optional()
   });
 
   // API Routes
@@ -177,10 +187,10 @@ async function startServer() {
       return res.status(400).json({ error: "Invalid magical data", details: validation.error.format() });
     }
 
-    const { email, name, age, class: userClass, role } = validation.data;
+    const { email, name, age, class: userClass, role, childEmail } = validation.data;
     logger.info(`Attempting to create user: ${email} with role: ${role}`);
     try {
-      const info = db.prepare("INSERT INTO users (email, name, age, class, role) VALUES (?, ?, ?, ?, ?)").run(email, name, age, userClass, role);
+      const info = db.prepare("INSERT INTO users (email, name, age, class, role, child_email) VALUES (?, ?, ?, ?, ?, ?)").run(email, name, age, userClass, role, childEmail || null);
       logger.info(`User created successfully: ${email}`);
       res.json({ id: info.lastInsertRowid });
     } catch (e) {
@@ -216,6 +226,50 @@ async function startServer() {
   app.get("/api/leaderboard", (req, res) => {
     const topWizards = db.prepare("SELECT name, level, exp, avatar FROM users ORDER BY exp DESC LIMIT 10").all();
     res.json(topWizards);
+  });
+
+  // Parent Routes
+  app.get("/api/parent/child-progress/:parentEmail", (req, res) => {
+    try {
+      const parent = db.prepare("SELECT * FROM users WHERE email = ? AND role = 'PARENT'").get(req.params.parentEmail) as any;
+      if (!parent) return res.status(404).json({ error: "Parent not found" });
+
+      const child = parent.child_email
+        ? db.prepare("SELECT * FROM users WHERE email = ?").get(parent.child_email) as any
+        : null;
+
+      if (!child) {
+        return res.json({ parent: { name: parent.name, email: parent.email }, child: null, progress: { total: 0, correct: 0, accuracy: 0, byCategory: [] }, leaderboardRank: null, recentActivity: [] });
+      }
+
+      const total = (db.prepare("SELECT COUNT(*) as count FROM progress WHERE user_id = ?").get(child.id) as any).count;
+      const correct = (db.prepare("SELECT COUNT(*) as count FROM progress WHERE user_id = ? AND is_correct = 1").get(child.id) as any).count;
+
+      const byCategory = db.prepare(`
+        SELECT q.category, COUNT(*) as total, SUM(CASE WHEN p.is_correct = 1 THEN 1 ELSE 0 END) as correct
+        FROM progress p JOIN questions q ON p.question_id = q.id
+        WHERE p.user_id = ? GROUP BY q.category
+      `).all(child.id);
+
+      const rank = (db.prepare("SELECT COUNT(*) + 1 as rank FROM users WHERE exp > (SELECT exp FROM users WHERE id = ?)").get(child.id) as any).rank;
+
+      const recentActivity = db.prepare(`
+        SELECT p.is_correct, q.category, q.question
+        FROM progress p JOIN questions q ON p.question_id = q.id
+        WHERE p.user_id = ? ORDER BY p.timestamp DESC LIMIT 10
+      `).all(child.id);
+
+      res.json({
+        parent: { name: parent.name, email: parent.email },
+        child: { id: child.id, name: child.name, email: child.email, level: child.level, exp: child.exp, mana: child.mana, class: child.class, avatar: child.avatar },
+        progress: { total, correct, accuracy: total > 0 ? Math.round((correct / total) * 100) : 0, byCategory },
+        leaderboardRank: rank,
+        recentActivity
+      });
+    } catch (e) {
+      logger.error("Failed to fetch child progress", e);
+      res.status(500).json({ error: "Failed to fetch child progress" });
+    }
   });
 
   // Admin Routes
