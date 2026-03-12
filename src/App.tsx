@@ -230,9 +230,9 @@ const Navbar = ({ onNavigate }: { onNavigate: (s: Screen) => void }) => (
       <h2 className="text-xl font-extrabold tracking-tight text-primary">11+WizardAcademy</h2>
     </div>
     <div className="hidden md:flex items-center gap-8">
-      <a className="text-sm font-semibold hover:text-primary transition-colors" href="#">Spells</a>
-      <a className="text-sm font-semibold hover:text-primary transition-colors" href="#">Potions</a>
-      <a className="text-sm font-semibold hover:text-primary transition-colors" href="#">Library</a>
+      <span className="text-sm font-semibold text-slate-500 cursor-default">Spells</span>
+      <span className="text-sm font-semibold text-slate-500 cursor-default">Potions</span>
+      <span className="text-sm font-semibold text-slate-500 cursor-default">Library</span>
     </div>
     <div className="flex items-center gap-4">
       <button 
@@ -299,9 +299,7 @@ const LandingPage = ({ onNavigate }: { onNavigate: (s: Screen) => void }) => (
             >
               Begin Initiation <ArrowLeft size={20} className="rotate-180" />
             </button>
-            <button className="px-8 py-4 rounded-full bg-white text-slate-900 font-bold text-lg border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
-              Explore Library <BookOpen size={20} />
-            </button>
+
           </div>
           <div className="flex items-center gap-4 mt-4">
             <div className="flex -space-x-3">
@@ -363,37 +361,7 @@ const LandingPage = ({ onNavigate }: { onNavigate: (s: Screen) => void }) => (
       </div>
     </section>
 
-    {/* Path Selection */}
-    <section className="px-6 py-20 lg:px-12 bg-slate-100">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col items-center text-center gap-4 mb-12">
-          <h2 className="text-3xl font-extrabold text-primary">Choose Your Path</h2>
-          <p className="text-slate-600 max-w-xl">Whether you prefer the laboratory of an alchemist or the dueling grounds of a battle mage, we have a curriculum for you.</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {[
-            { title: 'Alchemy 101', icon: <Sparkles size={20} />, desc: 'Master the delicate art of potion-making and transmuting base metals into pure magic.', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAbH6sfG3CVpJvPymenoQf3twX_rkIilhCX3MbZiZQjdbg0GwIN1eN0vG19BLLXrcaoRBUN6HjTFIjdSjWDgz0Bt6O2KO4QQr07-PILF78oU_IQAWegtEr7EdIuxyj-tGG2qfzcydQSj36FJpJrCvaJ0ZK4QWQmVo6t33nTpRH-2SQpwHJTfK8RSW2SNXpJeHtYMAoHJan9Z4zTS7NS70xjR8Vt701QFTwhEDG3UGSrSICps2LS9oQqCGzMtxonUgiXNjFChNUF9Gc' },
-            { title: 'Spell Casting', icon: <Bolt size={20} />, desc: 'Focus your mental energy through wands, staves, or bare hands to manifest incredible feats.', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAtWuDTh0yS3PR09SdiEnWe5ZPIaZHeUYYzBrUvH6ez0fzUMsyzgrnUVze5M6RSnrteNvZkoK9p7Ce74Nt6NTMve-xt_5QlNTV9Nz7j5vFxrqG93F_6ezQooUnMOHZtr1dEaq4vh8bBJkrQMv26xYXVb2MY8i7XBT4q6Jilm-N2QARhYN112eN5Owk_lVhYrMj-H9I30NPiclW-VchPtFB-d6w0Bfm7f1w_hFeIaKZl4giUXqh5zOSd5UUu09zQ56xBjqbh81grBHQ' },
-            { title: 'Ancient Runes', icon: <History size={20} />, desc: 'Learn the forgotten language of the ancients to enchant objects and decipher hidden portals.', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC8A2BiDpKlfLlvoEdSIfFn2hxP0ZOPY7MobTQQo38tqnHvkXwg_GiszhEl8oG3pKF9sQcDII_AzuAgMzKl9jaQTOYr2FPIM4j_rKe3aNkVryIXNS16KJIA5pa2XY-pJzO8dJQAKxsfqrA5AiJEVWN6VyUZ9AAwU_YI38CEFsEqU2xrGtU2OFo2Z-JEZxSLEB5Q6vCxiLZOqiWoEftgFeUeKvNuwLyawEnt6Aglc-Fh_4d8Tzt40x56PVO5Td4QkACWwRlIHD9iOfc' }
-          ].map((path, i) => (
-            <div key={i} className="group relative overflow-hidden rounded-xl bg-white shadow-sm border border-slate-200 hover:border-primary/50 transition-all p-2">
-              <div className="aspect-[4/3] rounded-lg overflow-hidden relative mb-4">
-                <img src={path.img} alt={path.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
-                <div className="absolute inset-0 bg-gradient-to-t from-primary/60 to-transparent"></div>
-                <div className="absolute bottom-4 left-4 text-white">
-                  <div className="mb-1">{path.icon}</div>
-                  <h3 className="font-bold text-lg">{path.title}</h3>
-                </div>
-              </div>
-              <div className="p-4">
-                <p className="text-sm text-slate-500 mb-4 leading-relaxed">{path.desc}</p>
-                <button className="w-full py-3 rounded-lg bg-primary/10 text-primary font-bold text-sm group-hover:bg-primary group-hover:text-white transition-colors">Join Class</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
+
 
     {/* Why Us Section */}
     <section className="px-6 py-24 lg:px-12 bg-white">
@@ -1625,7 +1593,7 @@ const Leaderboard = ({ onNavigate }: { onNavigate: (s: Screen) => void }) => {
               </div>
               <div className="absolute bottom-0 right-0 bg-yellow-400 text-white w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 border-white">1</div>
             </div>
-            <p className="font-black text-slate-900">Albus D.</p>
+            <p className="font-black text-slate-900">Orion S.</p>
             <div className="h-24 w-20 bg-yellow-400 rounded-t-3xl mt-2 flex items-center justify-center shadow-lg shadow-yellow-400/20">
               <span className="text-white font-black text-lg">1st</span>
             </div>
@@ -1667,10 +1635,10 @@ const Leaderboard = ({ onNavigate }: { onNavigate: (s: Screen) => void }) => {
 
         <div className="space-y-4 mb-8">
           {[
-            { rank: 4, name: 'Glinda W.', role: 'Sorcerer', exp: '8,920' },
-            { rank: 5, name: 'Harry P.', role: 'Seeker', exp: '8,450' },
-            { rank: 6, name: 'Hermione G.', role: 'Adept', exp: '8,100' },
-            { rank: 7, name: 'Ursula M.', role: 'Witch of Waste', exp: '7,820' }
+            { rank: 4, name: 'Elara V.', role: 'Sorcerer', exp: '8,920' },
+            { rank: 5, name: 'Finn C.', role: 'Spellblade', exp: '8,450' },
+            { rank: 6, name: 'Luna R.', role: 'Adept', exp: '8,100' },
+            { rank: 7, name: 'Ivy T.', role: 'Enchantress', exp: '7,820' }
           ].map((wiz) => (
             <div key={wiz.rank} className="flex items-center justify-between px-4">
               <div className="flex items-center gap-4">
